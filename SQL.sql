@@ -144,33 +144,6 @@ INSERT INTO VE VALUES
 SELECT * FROM VE;
 
 
-GO 
-
-
-
-CREATE TRIGGER TRG_KHONG_TRUNG_GHE
-ON VE
-INSTEAD OF INSERT
-AS
-BEGIN
-
-    IF EXISTS
-    (
-        SELECT * FROM VE V
-        JOIN inserted I ON V.MASUATCHIEU = I.MASUATCHIEU
-        AND V.MAGHE = I.MAGHE
-    )
-    BEGIN
-        RAISERROR(N'Ghế này đã được bán trong suất chiếu.',16,1);
-        RETURN;
-    END
-
-    INSERT INTO VE (MAVE, MAHOADON, MASUATCHIEU, MAGHE, GIAVEMUA)
-    SELECT MAVE, MAHOADON, MASUATCHIEU, MAGHE, GIAVEMUA FROM inserted;
-
-END;
-
-
 GO
 CREATE VIEW VW_LICH_CHIEU
 AS
@@ -179,8 +152,36 @@ FROM SUAT_CHIEU AS SC
 JOIN PHIM AS P ON SC.MAPHIM=P.MAPHIM
 JOIN PHONG_CHIEU AS PC ON SC.MAPHONG=PC.MAPHONG;
 GO
+-- Xem toàn bộ lịch chiếu cùng thông tin phim và phòng chiếu
+SELECT * FROM VW_LICH_CHIEU;
 
+-----------------------------------
+CREATE VIEW VW_KHACHHANG_MUALICHSU
+AS
+SELECT 
+    KH.MAKH AS [Mã Khách Hàng],
+    KH.HOTEN AS [Họ Tên],
+    KH.SDT AS [Số Điện Thoại],
+    KH.EMAIL AS [Email],
+    HD.MAHOADON AS [Mã Hóa Đơn],
+    HD.NGAYMUA AS [Ngày Mua],
+    HD.TONGTIEN AS [Tổng Tiền Hóa Đơn],
+    V.MAVE AS [Mã Vé],
+    P.TENPHIM AS [Tên Phim],
+    SC.NGAYGIOCHIEU AS [Suất Chiếu],
+    V.MAGHE AS [Mã Ghế],
+    V.GIAVEMUA AS [Giá Vé Mua]
+FROM KHACH_HANG KH
+LEFT JOIN HOA_DON HD ON KH.MAKH = HD.MAKH
+LEFT JOIN VE V ON HD.MAHOADON = V.MAHOADON
+LEFT JOIN SUAT_CHIEU SC ON V.MASUATCHIEU = SC.MASUATCHIEU
+LEFT JOIN PHIM P ON SC.MAPHIM = P.MAPHIM;
+GO
 
+-- Xem lịch sử mua vé của khách hàng (Bao gồm cả những khách chưa mua vé nếu có)
+SELECT * FROM VW_KHACHHANG_MUALICHSU;
+
+-----------------------------------------
 CREATE FUNCTION fn_SoGheTrong (@MaSuatChieu VARCHAR(15))
 RETURNS INT
 AS
@@ -199,7 +200,11 @@ BEGIN
     RETURN ISNULL(@SoGheToiDa, 0) - ISNULL(@SoGheDaBan, 0);
 END;
 GO
+-- Test 1: Kiểm tra số ghế trống của suất chiếu SC001 
+-- Theo dữ liệu của bạn, SC001 có tối đa 100 ghế và đã bán 2 vé (A01), kết quả mong đợi là 98.
+SELECT dbo.fn_SoGheTrong('SC001') AS [Số Ghế Trống SC001];
 
+------------------------------------------------
 CREATE FUNCTION fn_TongDoanhThuTheoNgayThang (
     @Ngay DATE = NULL,
     @Thang INT = NULL,
@@ -226,7 +231,13 @@ BEGIN
     RETURN ISNULL(@TongDoanhThu, 0);
 END;
 GO
+-- Test 2: Tính tổng doanh thu trong một ngày cụ thể (vd: 2026-07-19)
+SELECT dbo.fn_TongDoanhThuTheoNgayThang('2026-07-19', NULL, NULL) AS [Doanh Thu Ngày 19/07/2026];
 
+-- Test 3: Tính tổng doanh thu trong một tháng/năm cụ thể (vd: Tháng 7/2026)
+SELECT dbo.fn_TongDoanhThuTheoNgayThang(NULL, 7, 2026) AS [Doanh Thu Tháng 07/2026];
+
+--------------------------------------------------------------
 CREATE FUNCTION fn_PhimDoanhThuCaoNhat()
 RETURNS TABLE
 AS
@@ -246,25 +257,105 @@ RETURN (
 );
 GO
 
-CREATE VIEW VW_KHACHHANG_MUALICHSU
-AS
-SELECT 
-    KH.MAKH AS [Mã Khách Hàng],
-    KH.HOTEN AS [Họ Tên],
-    KH.SDT AS [Số Điện Thoại],
-    KH.EMAIL AS [Email],
-    HD.MAHOADON AS [Mã Hóa Đơn],
-    HD.NGAYMUA AS [Ngày Mua],
-    HD.TONGTIEN AS [Tổng Tiền Hóa Đơn],
-    V.MAVE AS [Mã Vé],
-    P.TENPHIM AS [Tên Phim],
-    SC.NGAYGIOCHIEU AS [Suất Chiếu],
-    V.MAGHE AS [Mã Ghế],
-    V.GIAVEMUA AS [Giá Vé Mua]
-FROM KHACH_HANG KH
-LEFT JOIN HOA_DON HD ON KH.MAKH = HD.MAKH
-LEFT JOIN VE V ON HD.MAHOADON = V.MAHOADON
-LEFT JOIN SUAT_CHIEU SC ON V.MASUATCHIEU = SC.MASUATCHIEU
-LEFT JOIN PHIM P ON SC.MAPHIM = P.MAPHIM;
-GO
+-- Test 4: Tìm phim có tổng doanh thu cao nhất từ việc bán vé
+SELECT * FROM dbo.fn_PhimDoanhThuCaoNhat();
 
+--------------------------------------------------------
+GO 
+CREATE TRIGGER TRG_KHONG_TRUNG_GHE
+ON VE
+INSTEAD OF INSERT
+AS
+BEGIN
+
+    IF EXISTS
+    (
+        SELECT * FROM VE V
+        JOIN inserted I ON V.MASUATCHIEU = I.MASUATCHIEU
+        AND V.MAGHE = I.MAGHE
+    )
+    BEGIN
+        RAISERROR(N'Ghế này đã được bán trong suất chiếu.',16,1);
+        RETURN;
+    END
+
+    INSERT INTO VE (MAVE, MAHOADON, MASUATCHIEU, MAGHE, GIAVEMUA)
+    SELECT MAVE, MAHOADON, MASUATCHIEU, MAGHE, GIAVEMUA FROM inserted;
+
+END;
+-- Test 1: Cố tình chèn một vé bị TRÙNG suất chiếu (SC001) và TRÙNG mã ghế (A01).
+-- KẾT QUẢ MONG ĐỢI: Hệ thống sẽ báo lỗi "Ghế này đã được bán trong suất chiếu." và lệnh bị hủy.
+BEGIN TRY
+    INSERT INTO VE (MAVE, MAHOADON, MASUATCHIEU, MAGHE, GIAVEMUA) 
+    VALUES ('V998', 'HD001', 'SC001', 'A01', 90000);
+END TRY
+BEGIN CATCH
+    SELECT ERROR_MESSAGE() AS [Thông Báo Lỗi Trigger];
+END CATCH;
+
+-- Test 2: Chèn một vé với mã ghế MỚI (B01) cho cùng suất chiếu SC001.
+-- KẾT QUẢ MONG ĐỢI: Thêm thành công vì ghế này chưa ai mua.
+INSERT INTO VE (MAVE, MAHOADON, MASUATCHIEU, MAGHE, GIAVEMUA) 
+VALUES ('V999', 'HD001', 'SC001', 'B01', 90000);
+
+-- Kiểm tra lại bảng vé để xác nhận V999 đã được thêm và V998 không tồn tại
+SELECT * FROM VE WHERE MASUATCHIEU = 'SC001';
+
+-------------------------------------------------------
+CREATE TRIGGER TRG_KIEMTRASOLUONGVE
+ON VE
+FOR INSERT
+AS
+BEGIN
+DECLARE @MASUATCHIEU VARCHAR(10);
+DECLARE @SOVEDABAN INT;
+DECLARE @SOGHETOIDA INT;
+
+SELECT @MASUATCHIEU = MASUATCHIEU FROM INSERTED;
+SELECT @SOVEDABAN = COUNT(*) FROM VE
+WHERE MASUATCHIEU = @MASUATCHIEU;
+SELECT @SOGHETOIDA = SOGHETOIDA FROM SUAT_CHIEU
+WHERE MASUATCHIEU = @MASUATCHIEU;
+IF (@SOVEDABAN > @SOGHETOIDA)
+BEGIN
+PRINT N'Lỗi: Suất chiếu này đã hết ghế trống! Không thể bán thêm vé.';
+ROLLBACK TRANSACTION;
+END
+ELSE
+BEGIN
+PRINT N'Bán vé thành công!';
+END
+END;
+
+-- Bước 1: Chuẩn bị dữ liệu để test
+-- Tạo 1 suất chiếu (SC_TEST) giới hạn đúng 2 ghế tối đa
+INSERT INTO SUAT_CHIEU (MASUATCHIEU, MAPHIM, MAPHONG, NGAYGIOCHIEU, GIAVE, SOGHETOIDA) 
+VALUES ('SC_TEST', 'P001', 'PC01', '2026-08-01 10:00', 90000, 2);
+
+-- Tạo 1 hóa đơn (HD_TEST) của khách hàng KH001 để mua vé
+INSERT INTO HOA_DON (MAHOADON, MAKH, NGAYMUA, TONGTIEN) 
+VALUES ('HD_TEST', 'KH001', '2026-08-01', 270000);
+
+
+-- Bước 2: Test kịch bản hợp lệ (Bán vé khi vẫn còn ghế)
+-- Bán vé thứ nhất (Tình trạng: 1/2 ghế)
+INSERT INTO VE (MAVE, MAHOADON, MASUATCHIEU, MAGHE, GIAVEMUA) 
+VALUES ('V_TEST1', 'HD_TEST', 'SC_TEST', 'A01', 90000);
+-- Kết quả hệ thống sẽ báo: "Bán vé thành công!"
+
+-- Bán vé thứ hai (Tình trạng: 2/2 ghế -> Vừa đầy)
+INSERT INTO VE (MAVE, MAHOADON, MASUATCHIEU, MAGHE, GIAVEMUA) 
+VALUES ('V_TEST2', 'HD_TEST', 'SC_TEST', 'A02', 90000);
+-- Kết quả hệ thống sẽ báo: "Bán vé thành công!"
+
+
+-- Bước 3: Test kịch bản vi phạm (Cố tình bán lố ghế)
+-- Bán vé thứ ba (Tình trạng: 3/2 ghế -> Bị lố)
+INSERT INTO VE (MAVE, MAHOADON, MASUATCHIEU, MAGHE, GIAVEMUA) 
+VALUES ('V_TEST3', 'HD_TEST', 'SC_TEST', 'A03', 90000);
+-- KẾT QUẢ: Hệ thống báo lỗi đỏ, in ra dòng chữ "Lỗi: Suất chiếu này đã vượt quá..." và lệnh này bị hủy.
+
+
+-- Bước 4: Nghiệm thu (Kiểm tra lại xem vé thứ 3 có lọt vào bảng không)
+SELECT * FROM VE WHERE MASUATCHIEU = 'SC_TEST';
+-- Bạn sẽ thấy chỉ có V_TEST1 và V_TEST2 tồn tại. V_TEST3 đã bị Trigger chặn đứng thành công.
