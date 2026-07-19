@@ -152,8 +152,21 @@ FROM SUAT_CHIEU AS SC
 JOIN PHIM AS P ON SC.MAPHIM=P.MAPHIM
 JOIN PHONG_CHIEU AS PC ON SC.MAPHONG=PC.MAPHONG;
 GO
+
 -- Xem toàn bộ lịch chiếu cùng thông tin phim và phòng chiếu
+-- Nhiệm vụ hoàn thành: - Tra cứu lịch chiếu của một bộ phim.
 SELECT * FROM VW_LICH_CHIEU;
+
+-- Tra cứu toàn bộ các suất chiếu trong ngày 20/07/2026
+-- Nhiệm vụ hoàn thành: - Tra cứu các suất chiếu theo ngày, theo phòng chiếu hoặc theo khoảng thời gian (Theo ngày).
+SELECT * FROM VW_LICH_CHIEU
+WHERE CAST(NGAYGIOCHIEU AS DATE) = '2026-07-20';
+
+-- Tra cứu toàn bộ lịch chiếu của "Phòng 1"
+-- Nhiệm vụ hoàn thành: - Tra cứu các suất chiếu theo ngày, theo phòng chiếu hoặc theo khoảng thời gian (Theo phòng chiếu).
+SELECT * FROM VW_LICH_CHIEU
+WHERE TENPHONG = N'Phòng 1';
+-- (Bạn có thể đổi 'Phòng 1' thành 'Phòng VIP' để test)
 
 -----------------------------------
 CREATE VIEW VW_KHACHHANG_MUALICHSU
@@ -179,6 +192,7 @@ LEFT JOIN PHIM P ON SC.MAPHIM = P.MAPHIM;
 GO
 
 -- Xem lịch sử mua vé của khách hàng (Bao gồm cả những khách chưa mua vé nếu có)
+-- Nhiệm vụ hoàn thành: - Tra cứu lịch sử mua vé của khách hàng.
 SELECT * FROM VW_KHACHHANG_MUALICHSU;
 
 -----------------------------------------
@@ -200,8 +214,10 @@ BEGIN
     RETURN ISNULL(@SoGheToiDa, 0) - ISNULL(@SoGheDaBan, 0);
 END;
 GO
+
 -- Test 1: Kiểm tra số ghế trống của suất chiếu SC001 
 -- Theo dữ liệu của bạn, SC001 có tối đa 100 ghế và đã bán 2 vé (A01), kết quả mong đợi là 98.
+-- Nhiệm vụ hoàn thành: - Theo dõi tình trạng ghế trống và số lượng vé còn lại của từng suất chiếu.
 SELECT dbo.fn_SoGheTrong('SC001') AS [Số Ghế Trống SC001];
 
 ------------------------------------------------
@@ -231,10 +247,13 @@ BEGIN
     RETURN ISNULL(@TongDoanhThu, 0);
 END;
 GO
+
 -- Test 2: Tính tổng doanh thu trong một ngày cụ thể (vd: 2026-07-19)
+-- Nhiệm vụ hoàn thành: - Thống kê doanh thu theo ngày, tháng hoặc năm.
 SELECT dbo.fn_TongDoanhThuTheoNgayThang('2026-07-19', NULL, NULL) AS [Doanh Thu Ngày 19/07/2026];
 
 -- Test 3: Tính tổng doanh thu trong một tháng/năm cụ thể (vd: Tháng 7/2026)
+-- Nhiệm vụ hoàn thành: - Thống kê doanh thu theo ngày, tháng hoặc năm.
 SELECT dbo.fn_TongDoanhThuTheoNgayThang(NULL, 7, 2026) AS [Doanh Thu Tháng 07/2026];
 
 --------------------------------------------------------------
@@ -258,6 +277,7 @@ RETURN (
 GO
 
 -- Test 4: Tìm phim có tổng doanh thu cao nhất từ việc bán vé
+-- Nhiệm vụ hoàn thành: - Tìm các phim có doanh thu cao nhất hoặc thấp nhất.
 SELECT * FROM dbo.fn_PhimDoanhThuCaoNhat();
 
 --------------------------------------------------------
@@ -290,6 +310,7 @@ BEGIN TRY
     VALUES ('V998', 'HD001', 'SC001', 'A01', 90000);
 END TRY
 BEGIN CATCH
+    -- Nhiệm vụ hoàn thành: - Thực hiện các thao tác cập nhật dữ liệu tự động nhằm đảm bảo tính chính xác, nhất quán và toàn vẹn của hệ thống (Test bắt lỗi).
     SELECT ERROR_MESSAGE() AS [Thông Báo Lỗi Trigger];
 END CATCH;
 
@@ -299,6 +320,7 @@ INSERT INTO VE (MAVE, MAHOADON, MASUATCHIEU, MAGHE, GIAVEMUA)
 VALUES ('V999', 'HD001', 'SC001', 'B01', 90000);
 
 -- Kiểm tra lại bảng vé để xác nhận V999 đã được thêm và V998 không tồn tại
+-- Nhiệm vụ hoàn thành: - Thực hiện các thao tác cập nhật dữ liệu tự động nhằm đảm bảo tính chính xác, nhất quán và toàn vẹn của hệ thống (Nghiệm thu toàn vẹn dữ liệu).
 SELECT * FROM VE WHERE MASUATCHIEU = 'SC001';
 
 -------------------------------------------------------
@@ -312,10 +334,13 @@ DECLARE @SOVEDABAN INT;
 DECLARE @SOGHETOIDA INT;
 
 SELECT @MASUATCHIEU = MASUATCHIEU FROM INSERTED;
+
 SELECT @SOVEDABAN = COUNT(*) FROM VE
 WHERE MASUATCHIEU = @MASUATCHIEU;
+
 SELECT @SOGHETOIDA = SOGHETOIDA FROM SUAT_CHIEU
 WHERE MASUATCHIEU = @MASUATCHIEU;
+
 IF (@SOVEDABAN > @SOGHETOIDA)
 BEGIN
 PRINT N'Lỗi: Suất chiếu này đã hết ghế trống! Không thể bán thêm vé.';
@@ -357,5 +382,6 @@ VALUES ('V_TEST3', 'HD_TEST', 'SC_TEST', 'A03', 90000);
 
 
 -- Bước 4: Nghiệm thu (Kiểm tra lại xem vé thứ 3 có lọt vào bảng không)
+-- Nhiệm vụ hoàn thành: - Thực hiện các thao tác cập nhật dữ liệu tự động nhằm đảm bảo tính chính xác, nhất quán và toàn vẹn của hệ thống (Nghiệm thu toàn vẹn dữ liệu).
 SELECT * FROM VE WHERE MASUATCHIEU = 'SC_TEST';
 -- Bạn sẽ thấy chỉ có V_TEST1 và V_TEST2 tồn tại. V_TEST3 đã bị Trigger chặn đứng thành công.
